@@ -17,7 +17,7 @@ def generate_shocks(
     # Drift settings (annual return assumptions)
     if annual_drift is None:
         annual_drift = {
-            "bearish": -0.3,
+            "bearish": -0.3, 
             "neutral": 0.0,
             "bullish": 0.3
         }.get(outlook, 0.0)

@@ -28,7 +28,7 @@ def run_monte_carlo_simulation(P0, num_tokens, discounts, hedge_ratios, funding_
                 outlook=price_outlook
             )
             # Collect collateral_series from the results
-            results.append((discount, hedge_ratio, funding_rate, res["Annualized IRR"], res["Total_PnL"], res["prices"], res["collateral_series"]))
+            results.append((discount, hedge_ratio, funding_rate, res["Annualized IRR"], res["Total_PnL"], res["prices"], res["collateral_series"], res["simulation_details"]))
         return results
 
     tasks = []
@@ -51,10 +51,10 @@ def run_monte_carlo_simulation(P0, num_tokens, discounts, hedge_ratios, funding_
 
     # Aggregation dictionary
     agg = defaultdict(list)
-    for d, h, f, irr, pnl, price_path, collateral_series in flat_results:
+    for d, h, f, irr, pnl, price_path, collateral_series, sim_details in flat_results:
         if irr is not None:  # Ensure that only valid results with a non-None IRR are included
             key = (round(d, 4), round(h, 3), round(f, 3))
-            agg[key].append((irr, pnl, price_path, collateral_series))
+            agg[key].append((irr, pnl, price_path, collateral_series, sim_details))
 
     # Final results and detailed data structures
     results = []
@@ -62,6 +62,7 @@ def run_monte_carlo_simulation(P0, num_tokens, discounts, hedge_ratios, funding_
     detailed_ann_irr = defaultdict(list)
     detailed_pnl = defaultdict(list)
     detailed_collateral = defaultdict(list)
+    detailed_simulations = defaultdict(list)
 
     # Create DataFrame for boxplot results
     results_df_box = pd.DataFrame([
@@ -72,13 +73,13 @@ def run_monte_carlo_simulation(P0, num_tokens, discounts, hedge_ratios, funding_
             "Annualized_IRR": irr,
             "Total_PnL": pnl
         }
-        for d, h, f, irr, pnl, price_path, collateral_series in flat_results if irr is not None
+        for d, h, f, irr, pnl, price_path, collateral_series, sim_details in flat_results if irr is not None
     ])
 
     # Populate results and store detailed data
     for key, rows in agg.items():
         d, h, f = key
-        irrs, pnls, prices, collaterals = zip(*rows)
+        irrs, pnls, prices, collaterals, simulations = zip(*rows)
 
         results.append({
             "discount": d,
@@ -94,6 +95,7 @@ def run_monte_carlo_simulation(P0, num_tokens, discounts, hedge_ratios, funding_
         detailed_prices[key] = list(prices)
         detailed_ann_irr[key] = list(irrs)
         detailed_pnl[key] = list(pnls)
-        detailed_collateral[key] = list(collaterals)  # Store collateral series
+        detailed_collateral[key] = list(collaterals)
+        detailed_simulations[key] = list(simulations)  # Store collateral series
 
-    return pd.DataFrame(results), detailed_prices, detailed_ann_irr, detailed_pnl, pd.DataFrame(results_df_box), detailed_collateral
+    return pd.DataFrame(results), detailed_prices, detailed_ann_irr, detailed_pnl, pd.DataFrame(results_df_box), detailed_collateral, detailed_simulations
