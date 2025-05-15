@@ -68,15 +68,15 @@ with st.sidebar.expander("Funding Rate Settings", expanded=False):
 outlook = st.sidebar.selectbox("Price Outlook", ["bearish", "neutral", "bullish"])
 
 margin_tiers = [
-    {"notionalFloor": 0, "notionalCap": 10_000, "maintMarginRate": 0.01, "maintAmount": 0},
-    {"notionalFloor": 10_000, "notionalCap": 60_000, "maintMarginRate": 0.015, "maintAmount": 50},
-    {"notionalFloor": 60_000, "notionalCap": 300_000, "maintMarginRate": 0.02, "maintAmount": 350},
-    {"notionalFloor": 300_000, "notionalCap": 600_000, "maintMarginRate": 0.025, "maintAmount": 1850},
-    {"notionalFloor": 600_000, "notionalCap": 3_000_000, "maintMarginRate": 0.05, "maintAmount": 16850},
-    {"notionalFloor": 3_000_000, "notionalCap": 6_000_000, "maintMarginRate": 0.10, "maintAmount": 166850},
-    {"notionalFloor": 6_000_000, "notionalCap": 7_500_000, "maintMarginRate": 0.125, "maintAmount": 316850},
-    {"notionalFloor": 7_500_000, "notionalCap": 15_000_000, "maintMarginRate": 0.25, "maintAmount": 1254350},
-    {"notionalFloor": 15_000_000, "notionalCap": 30_000_000, "maintMarginRate": 0.50, "maintAmount": 5004350},
+    {"notionalFloor": 0,             "notionalCap": 5_000,         "maintMarginRate": 0.0100, "maintAmount": 0},
+    {"notionalFloor": 5_000,         "notionalCap": 10_000,        "maintMarginRate": 0.0150, "maintAmount": 25},
+    {"notionalFloor": 10_000,        "notionalCap": 30_000,        "maintMarginRate": 0.0200, "maintAmount": 75},
+    {"notionalFloor": 30_000,        "notionalCap": 60_000,        "maintMarginRate": 0.0250, "maintAmount": 225},
+    {"notionalFloor": 60_000,        "notionalCap": 300_000,       "maintMarginRate": 0.0500, "maintAmount": 1_725},
+    {"notionalFloor": 300_000,       "notionalCap": 600_000,       "maintMarginRate": 0.1000, "maintAmount": 16_725},
+    {"notionalFloor": 600_000,       "notionalCap": 750_000,       "maintMarginRate": 0.1250, "maintAmount": 31_725},
+    {"notionalFloor": 750_000,       "notionalCap": 1_500_000,     "maintMarginRate": 0.2500, "maintAmount": 125_475},
+    {"notionalFloor": 1_500_000,     "notionalCap": 3_000_000,     "maintMarginRate": 0.5000, "maintAmount": 500_475},
 ]
 
 # Shock parameters
@@ -94,7 +94,7 @@ token_run = st.sidebar.button("Run Simulation")
 if token_run:
     if input_method == "Investment Amount":
         num_tokens = investment_amount / (P0 * (1 - discounts[0]))
-    df, d_pr, d_irr, d_pnl, df_box, d_coll = run_monte_carlo_simulation(
+    df, d_pr, d_irr, d_pnl, df_box, d_coll, d_sim = run_monte_carlo_simulation(
         P0=P0,
         num_tokens=num_tokens,
         discounts=discounts,
@@ -115,7 +115,8 @@ if token_run:
         "d_irr": d_irr,
         "d_pnl": d_pnl,
         "df_box": df_box,
-        "d_coll": d_coll
+        "d_coll": d_coll,
+        "d_sim": d_sim
     })
 
 # Display results
@@ -126,6 +127,7 @@ if "res_df" in st.session_state:
     d_pnl  = st.session_state["d_pnl"]
     df_box = st.session_state["df_box"]
     d_coll = st.session_state["d_coll"]
+    d_sim  = st.session_state.get("d_sim", {})
 
     # Price Paths
     st.subheader("Price Paths")
@@ -182,19 +184,36 @@ if "res_df" in st.session_state:
     else:
         st.info("Select at least one scenario to display histograms.")
 
-    # Best Discount Finder
-    st.subheader("Recommended Discounts by Scenario")
-    target_irr = st.slider(
-        """
-For each set of hedge ratios and funding rates simulated determines the lowest discount
-that achieves in median at least the target IRR. If none meet the target, pick
-the discount whose median IRR is closest to the target.
-""",
-        min_value=0.0,
-        max_value=1.0,
-        value=0.25,
-        format="%.2f"
+# Download button for a single run's detailed simulation
+if "d_sim" in st.session_state:
+    st.subheader("Download Simulation Details (Single Run)")
+
+    # Scenario selection dropdown
+    scenario_keys = list(st.session_state["d_sim"].keys())
+    scenario_labels = [f"Discount={d:.2%}, Hedge={h:.2%}, Funding={f:.2%}" for (d, h, f) in scenario_keys]
+    scenario_map = dict(zip(scenario_labels, scenario_keys))
+
+    selected_label = st.selectbox("Select Scenario for Download", scenario_labels)
+    selected_key = scenario_map[selected_label]
+
+    # Choose run index
+    num_runs_available = len(st.session_state["d_sim"][selected_key])
+    run_index = st.number_input("Simulation Run Index", min_value=0, max_value=num_runs_available-1, value=0)
+
+    # Get the detailed DataFrame
+    sim_df = st.session_state["d_sim"][selected_key][run_index]
+
+    # Display first few rows
+    st.dataframe(sim_df.head(), use_container_width=True)
+
+    # Download CSV button
+    csv = sim_df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="Download Simulation Details (CSV)",
+        data=csv,
+        file_name=f"simulation_details_{selected_label.replace('%','').replace(' ','_')}_run{run_index}.csv",
+        mime="text/csv"
     )
-    find_best_discount(df, target_irr)
 else:
-    st.warning("Run simulation first.")
+    st.info("Run the simulation first to enable downloads.")
+
